@@ -11,7 +11,8 @@ dataset = 'cora'
 
 # training params
 batch_size = 1
-nb_epochs = 100000
+# nb_epochs = 100000
+nb_epochs = 1000
 patience = 100
 lr = 0.005  # learning rate
 l2_coef = 0.0005  # weight decay
@@ -33,6 +34,7 @@ print('residual: ' + str(residual))
 print('nonlinearity: ' + str(nonlinearity))
 print('model: ' + str(model))
 
+# adj == Adjacency Matrix 邻接矩阵
 adj, features, y_train, y_val, y_test, train_mask, val_mask, test_mask = process.load_data(dataset)
 features, spars = process.preprocess_features(features)
 
@@ -42,6 +44,7 @@ nb_classes = y_train.shape[1]
 
 adj = adj.todense()
 
+# add dimension for batch
 features = features[np.newaxis]
 adj = adj[np.newaxis]
 y_train = y_train[np.newaxis]
@@ -51,6 +54,7 @@ train_mask = train_mask[np.newaxis]
 val_mask = val_mask[np.newaxis]
 test_mask = test_mask[np.newaxis]
 
+# biases: use -1e+9 to express graph structure (not connected) 
 biases = process.adj_to_bias(adj, [nb_nodes], nhood=1)
 
 with tf.Graph().as_default():
@@ -80,8 +84,8 @@ with tf.Graph().as_default():
 
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
-    vlss_mn = np.inf
-    vacc_mx = 0.0
+    vlss_mn = np.inf    # loss_min
+    vacc_mx = 0.0       # accuracy max
     curr_step = 0
 
     with tf.Session() as sess:
@@ -95,7 +99,8 @@ with tf.Graph().as_default():
         for epoch in range(nb_epochs):
             tr_step = 0
             tr_size = features.shape[0]
-
+            
+            # training set
             while tr_step * batch_size < tr_size:
                 _, loss_value_tr, acc_tr = sess.run([train_op, loss, accuracy],
                     feed_dict={
@@ -111,7 +116,8 @@ with tf.Graph().as_default():
 
             vl_step = 0
             vl_size = features.shape[0]
-
+            
+            # validation set
             while vl_step * batch_size < vl_size:
                 loss_value_vl, acc_vl = sess.run([loss, accuracy],
                     feed_dict={
@@ -128,7 +134,8 @@ with tf.Graph().as_default():
             print('Training: loss = %.5f, acc = %.5f | Val: loss = %.5f, acc = %.5f' %
                     (train_loss_avg/tr_step, train_acc_avg/tr_step,
                     val_loss_avg/vl_step, val_acc_avg/vl_step))
-
+            
+            # auto early stop
             if val_acc_avg/vl_step >= vacc_mx or val_loss_avg/vl_step <= vlss_mn:
                 if val_acc_avg/vl_step >= vacc_mx and val_loss_avg/vl_step <= vlss_mn:
                     vacc_early_model = val_acc_avg/vl_step
@@ -155,7 +162,8 @@ with tf.Graph().as_default():
         ts_step = 0
         ts_loss = 0.0
         ts_acc = 0.0
-
+        
+        # test set
         while ts_step * batch_size < ts_size:
             loss_value_ts, acc_ts = sess.run([loss, accuracy],
                 feed_dict={
